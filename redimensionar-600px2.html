@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Redimensionar imagen a 600px</title>
+<style>
+  body {
+    font-family: -apple-system, Segoe UI, Arial, sans-serif;
+    max-width: 640px;
+    margin: 40px auto;
+    padding: 0 20px;
+    color: #222;
+  }
+  h1 { font-size: 1.3rem; }
+  .drop {
+    border: 2px dashed #999;
+    border-radius: 10px;
+    padding: 30px;
+    text-align: center;
+    cursor: pointer;
+    background: #fafafa;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .drop.drag { background: #eef4ff; border-color: #4a7dff; }
+  input[type=file] { display: none; }
+  #preview {
+    max-width: 100%;
+    margin-top: 20px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    display: none;
+  }
+  #info {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    color: #555;
+  }
+  #download {
+    display: none;
+    margin-top: 16px;
+    padding: 10px 18px;
+    background: #2d6cdf;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  #download:hover { background: #1f56bd; }
+  #copyBtn {
+    margin-top: 16px;
+    margin-right: 8px;
+    padding: 10px 18px;
+    background: #444;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  #copyBtn:hover { background: #2c2c2c; }
+  select {
+    margin-top: 10px;
+    padding: 4px 8px;
+  }
+  label { font-size: 0.9rem; margin-right: 6px; }
+</style>
+</head>
+<body>
+
+<h1>Redimensionar imagen a 600 px de ancho</h1>
+<p>Subí una imagen y la devuelve escalada a 600 px de ancho (alto proporcional), con buena calidad de interpolación.</p>
+
+<div class="drop" id="drop">
+  <p>Hacé clic acá, arrastrá una imagen, o pegala con Ctrl+V</p>
+  <input type="file" id="fileInput" accept="image/*">
+</div>
+
+<div>
+  <label for="format">Formato de salida:</label>
+  <select id="format">
+    <option value="image/png">PNG (sin pérdida)</option>
+    <option value="image/jpeg">JPG (calidad alta)</option>
+  </select>
+</div>
+
+<img id="preview">
+<div id="info"></div>
+<div>
+  <button id="copyBtn" style="display:none;">Copiar al portapapeles</button>
+  <a id="download">Descargar imagen redimensionada</a>
+</div>
+<div id="copyStatus" style="font-size:0.85rem; color:#2d8a2d; margin-top:6px;"></div>
+
+<canvas id="canvas" style="display:none;"></canvas>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const preview = document.getElementById('preview');
+const info = document.getElementById('info');
+const downloadBtn = document.getElementById('download');
+const canvas = document.getElementById('canvas');
+const formatSelect = document.getElementById('format');
+const copyBtn = document.getElementById('copyBtn');
+const copyStatus = document.getElementById('copyStatus');
+
+const TARGET_WIDTH = 600;
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('drag');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+formatSelect.addEventListener('change', () => {
+  if (canvas.width) renderDownload();
+});
+
+document.addEventListener('paste', e => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) handleFile(file);
+      break;
+    }
+  }
+});
+
+copyBtn.addEventListener('click', async () => {
+  try {
+    const format = formatSelect.value;
+    canvas.toBlob(async blob => {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type]: blob })
+        ]);
+        copyStatus.textContent = '✓ Copiada al portapapeles — ya podés pegarla (Ctrl+V) donde quieras.';
+      } catch (err) {
+        copyStatus.textContent = 'No se pudo copiar automáticamente. Probá descargarla en su lugar.';
+        copyStatus.style.color = '#b00';
+      }
+    }, format, format === 'image/jpeg' ? 0.95 : undefined);
+  } catch (err) {
+    copyStatus.textContent = 'No se pudo copiar automáticamente. Probá descargarla en su lugar.';
+    copyStatus.style.color = '#b00';
+  }
+});
+
+function handleFile(file) {
+  if (!file.type.startsWith('image/')) {
+    alert('Eso no es una imagen.');
+    return;
+  }
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = e => {
+    img.onload = () => {
+      const scale = TARGET_WIDTH / img.width;
+      const targetHeight = Math.round(img.height * scale);
+
+      canvas.width = TARGET_WIDTH;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.clearRect(0, 0, TARGET_WIDTH, targetHeight);
+      ctx.drawImage(img, 0, 0, TARGET_WIDTH, targetHeight);
+
+      preview.src = canvas.toDataURL('image/png');
+      preview.style.display = 'block';
+      info.textContent = `Original: ${img.width}×${img.height} px  →  Nueva: ${TARGET_WIDTH}×${targetHeight} px`;
+
+      renderDownload(file.name);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderDownload(originalName) {
+  const format = formatSelect.value;
+  const ext = format === 'image/png' ? 'png' : 'jpg';
+  const quality = format === 'image/jpeg' ? 0.95 : undefined;
+  const dataUrl = canvas.toDataURL(format, quality);
+
+  downloadBtn.href = dataUrl;
+  const base = (originalName || 'imagen').replace(/\.[^/.]+$/, '');
+  downloadBtn.download = `${base}-600px.${ext}`;
+  downloadBtn.style.display = 'inline-block';
+  downloadBtn.textContent = `Descargar (${ext.toUpperCase()})`;
+  copyBtn.style.display = 'inline-block';
+  copyStatus.textContent = '';
+  copyStatus.style.color = '#2d8a2d';
+
+  preview.src = dataUrl;
+}
+</script>
+
+</body>
+</html>
