@@ -88,6 +88,10 @@
 <img id="preview">
 <div id="info"></div>
 <div>
+  <label for="filename">Nombre del archivo:</label>
+  <input type="text" id="filename" placeholder="nombre-de-la-imagen" style="padding:6px 8px; margin-top:8px; width:220px;">
+</div>
+<div>
   <button id="copyBtn" style="display:none;">Copiar al portapapeles</button>
   <a id="download">Descargar imagen redimensionada</a>
 </div>
@@ -105,6 +109,8 @@ const canvas = document.getElementById('canvas');
 const formatSelect = document.getElementById('format');
 const copyBtn = document.getElementById('copyBtn');
 const copyStatus = document.getElementById('copyStatus');
+const filenameInput = document.getElementById('filename');
+let currentBaseName = 'imagen';
 
 const TARGET_WIDTH = 600;
 
@@ -120,6 +126,10 @@ fileInput.addEventListener('change', e => {
   if (e.target.files.length) handleFile(e.target.files[0]);
 });
 formatSelect.addEventListener('change', () => {
+  if (canvas.width) renderDownload();
+});
+
+filenameInput.addEventListener('input', () => {
   if (canvas.width) renderDownload();
 });
 
@@ -179,22 +189,27 @@ function handleFile(file) {
       preview.style.display = 'block';
       info.textContent = `Original: ${img.width}×${img.height} px  →  Nueva: ${TARGET_WIDTH}×${targetHeight} px`;
 
-      renderDownload(file.name);
+      currentBaseName = (file.name || 'imagen').replace(/\.[^/.]+$/, '');
+      filenameInput.value = `${currentBaseName}-600px`;
+
+      renderDownload();
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 
-function renderDownload(originalName) {
+function renderDownload() {
   const format = formatSelect.value;
   const ext = format === 'image/png' ? 'png' : 'jpg';
   const quality = format === 'image/jpeg' ? 0.95 : undefined;
   const dataUrl = canvas.toDataURL(format, quality);
 
+  const typedName = filenameInput.value.trim();
+  const base = typedName || currentBaseName || 'imagen';
+
   downloadBtn.href = dataUrl;
-  const base = (originalName || 'imagen').replace(/\.[^/.]+$/, '');
-  downloadBtn.download = `${base}-600px.${ext}`;
+  downloadBtn.download = `${base}.${ext}`;
   downloadBtn.style.display = 'inline-block';
   downloadBtn.textContent = `Descargar (${ext.toUpperCase()})`;
   copyBtn.style.display = 'inline-block';
